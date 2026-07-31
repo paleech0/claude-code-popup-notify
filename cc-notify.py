@@ -17,6 +17,7 @@ Claude Code 桌面弹窗 Hook — 权限对话框 + 空闲通知
 import sys
 import os
 import json
+import math
 import traceback
 import threading
 
@@ -29,6 +30,29 @@ ERROR_LOG = os.path.join(SCRIPT_DIR, 'cc-notify_error.log')
 
 IS_WIN = sys.platform == 'win32'
 IS_MAC = sys.platform == 'darwin'
+
+
+def _enable_dpi_awareness():
+    """
+    让 tk 窗口按系统 DPI 正确缩放（必须在创建任何窗口前调用）。
+
+    不启用时：tkinter 是 non-DPI-aware 进程，窗口按逻辑像素布局后被
+    Windows 放大（如 150% 缩放），而 winfo_screenheight() 返回物理像素，
+    居中计算混用两套坐标会把窗口挤出屏幕底部（弹窗按钮区落到屏幕外）。
+    """
+    if not IS_WIN:
+        return
+    try:
+        import ctypes
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)  # PROCESS_PER_MONITOR_DPI_AWARE
+    except Exception:
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
+
+_enable_dpi_awareness()
 
 if IS_WIN:
     FONT_SANS = ('Microsoft YaHei UI', 10)
@@ -283,13 +307,31 @@ def _foreground_linux():
 # tkinter 工具函数
 # ═══════════════════════════════════════════════════════════════════════
 
+def _screen_scale():
+    """系统 DPI 缩放系数（如 150% 缩放 → 1.5）。失败时按 1.0。"""
+    try:
+        import ctypes
+        return ctypes.windll.user32.GetDpiForSystem() / 96.0
+    except Exception:
+        return 1.0
+
+
 def _center_window(root, w, h):
-    """将窗口放在鼠标所在显示器的中央。"""
+    """
+    将窗口放在主显示器中央（统一按 96dpi 逻辑像素坐标系）。
+
+    注意：winfo_screenwidth/height 返回物理像素，而 tk 的 geometry 尺寸是
+    逻辑像素。高 DPI 缩放下直接混用会把窗口算到屏幕外（按钮区被截走），
+    所以这里显式把物理屏幕宽高除以缩放系数换算成逻辑单位。
+    """
     root.update_idletasks()
     try:
-        sw = root.winfo_screenwidth()
-        sh = root.winfo_screenheight()
-        root.geometry(f'{w}x{h}+{(sw - w) // 2}+{(sh - h) // 2}')
+        scale = _screen_scale()
+        sw = root.winfo_screenwidth() / scale
+        sh = root.winfo_screenheight() / scale
+        x = max((sw - w) // 2, 0)
+        y = max((sh - h) // 2, 0)
+        root.geometry(f'{w}x{h}+{int(x)}+{int(y)}')
     except Exception:
         root.geometry(f'{w}x{h}+100+100')
 
@@ -342,6 +384,27 @@ def _render_questions(tool_name, tool_input):
                 lines.append(f'    {bullet}  {label}')
 
     return (summary, '\n'.join(lines))
+
+
+def _estimate_wrap_lines(text, wrap_px):
+    """
+    估算文本按 wrap_px 像素宽度折行后的显示行数。
+    用于判断选项文本是否过长、需要切换为滚动显示。
+    CJK 字符按双宽近似；任何异常兜底为单宽 8px，不抛错。
+    """
+    try:
+        import tkinter.font as tkfont
+        mono = tkfont.Font(font=FONT_MONO)
+        unit = mono.measure('0') or 8
+    except Exception:
+        unit = 8
+    if not text:
+        return 1
+    lines = 0
+    for ln in text.split('\n'):
+        w = sum(2 if ord(ch) > 0x2E80 else 1 for ch in ln)
+        lines += max(1, math.ceil(w * unit / max(wrap_px, 1)))
+    return lines
 
 
 def _generate_summary(tool_name, tool_input):
@@ -476,9 +539,29 @@ def show_permission_dialog(data):
         )
         q_label.pack(fill='x')
 
-        # 根据选项数量调整窗口高度
-        option_lines = q_text.count('\n') + 1
-        win_h = max(win_h, 220 + min(option_lines, 12) * 18)
+        # 超长选项：改用带滚动条的文本框，避免把底部按钮顶出窗口
+        if _estimate_wrap_lines(q_text, win_w - 60) > 16:
+            q_label.pack_forget()
+            q_label.destroy()
+
+            opt_frame = tk.Frame(card, bg=COLORS['card'])
+            opt_frame.pack(fill='x')
+
+            opt_text = tk.Text(
+                opt_frame, font=FONT_MONO, fg=COLORS['text'],
+                bg=COLORS['card_input'], wrap='char', height=16,
+                bd=1, padx=12, pady=10, cursor='arrow', relief='solid'
+            )
+            opt_text.insert('1.0', q_text)
+            opt_text.configure(state='disabled')
+            opt_text.pack(side='left', fill='both', expand=True)
+
+            opt_scroll = tk.Scrollbar(
+                opt_frame, command=opt_text.yview,
+                bd=0, elementborderwidth=0, highlightthickness=0
+            )
+            opt_scroll.pack(side='right', fill='y')
+            opt_text.configure(yscrollcommand=opt_scroll.set)
 
     else:
         # 权限概述（中文自然语言描述）
@@ -648,6 +731,16 @@ def show_permission_dialog(data):
             root.after(12000, _reflash)
 
     root.after(12000, _reflash)
+
+    # ── 按内容实际渲染尺寸自适应窗口 ──────────────────────────────
+    # 长文本自动撑高窗口（封顶逻辑屏幕高度，防止高 DPI 下超出屏幕），
+    # 按钮永远不会被顶出
+    root.update_idletasks()
+    req_h = root.winfo_reqheight()
+    req_w = root.winfo_reqwidth()
+    sh = root.winfo_screenheight() / _screen_scale()
+    _center_window(root, max(req_w, win_w), min(req_h, sh - 120))
+
     root.mainloop()
 
     if timed_out.is_set():
