@@ -33,13 +33,13 @@
 **Windows（PowerShell）：**
 
 ```powershell
-md "$env:USERPROFILE\.claude\hooks" -Force; Invoke-WebRequest -Uri "https://raw.githubusercontent.com/paleech0/small-pieces/main/cc-notify.py" -OutFile "$env:USERPROFILE\.claude\hooks\cc-notify.py"
+md "$env:USERPROFILE\.claude\hooks" -Force; Invoke-WebRequest -Uri "https://raw.githubusercontent.com/paleech0/claude-code-popup-notify/main/cc-notify.py" -OutFile "$env:USERPROFILE\.claude\hooks\cc-notify.py"
 ```
 
 **macOS / Linux：**
 
 ```bash
-mkdir -p ~/.claude/hooks && curl -o ~/.claude/hooks/cc-notify.py https://raw.githubusercontent.com/paleech0/small-pieces/main/cc-notify.py
+mkdir -p ~/.claude/hooks && curl -o ~/.claude/hooks/cc-notify.py https://raw.githubusercontent.com/paleech0/claude-code-popup-notify/main/cc-notify.py
 ```
 
 然后用下面的配置完成安装。
