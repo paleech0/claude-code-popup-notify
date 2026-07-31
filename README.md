@@ -17,6 +17,8 @@
 - **空闲屏蔽**：空闲通知可临时关闭，重启 CC 后自动恢复（同一会话内有效）
 - **记住规则**：「同意并记住」将权限规则持久化到本地设置，下次自动通过
 - **键盘快捷键**：`Enter` 同意 · `Esc` 拒绝 · `Ctrl+Enter` 同意并记住
+- **窗口自适应**：弹窗按内容实际渲染尺寸自动调整大小（长文本自动撑高），选项超长时自动出现滚动条，底部按钮永不被顶出窗口
+- **高 DPI 适配**：150% 等屏幕缩放下窗口按逻辑像素统一换算，不会超出屏幕或被截走按钮
 
 ## 安装前提
 
@@ -31,13 +33,13 @@
 **Windows（PowerShell）：**
 
 ```powershell
-md "$env:USERPROFILE\.claude\hooks" -Force; Invoke-WebRequest -Uri "https://raw.githubusercontent.com/paleech0/small-pieces/master/cc-notify.py" -OutFile "$env:USERPROFILE\.claude\hooks\cc-notify.py"
+md "$env:USERPROFILE\.claude\hooks" -Force; Invoke-WebRequest -Uri "https://raw.githubusercontent.com/paleech0/small-pieces/main/cc-notify.py" -OutFile "$env:USERPROFILE\.claude\hooks\cc-notify.py"
 ```
 
 **macOS / Linux：**
 
 ```bash
-mkdir -p ~/.claude/hooks && curl -o ~/.claude/hooks/cc-notify.py https://raw.githubusercontent.com/paleech0/small-pieces/master/cc-notify.py
+mkdir -p ~/.claude/hooks && curl -o ~/.claude/hooks/cc-notify.py https://raw.githubusercontent.com/paleech0/small-pieces/main/cc-notify.py
 ```
 
 然后用下面的配置完成安装。
@@ -172,7 +174,7 @@ Claude Code 事件触发
 
 | 文件 | 用途 |
 |------|------|
-| `cc-notify.py` | 主脚本，~450 行纯 Python |
+| `cc-notify.py` | 主脚本，~550 行纯 Python |
 | `cc-notify_error.log` | 错误日志（自动生成） |
 | `cc-notify_muted.json` | 空闲屏蔽标记（自动生成） |
 | `cc-notify_quiet` | 静默模式标记（手动或通过界面切换） |
