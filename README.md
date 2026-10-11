@@ -4,8 +4,6 @@
 
 > 灵感来自 [KYinCode/claude-code-popup-hooks](https://github.com/KYinCode/claude-code-popup-hooks)，在其基础上重构并大幅增强。
 
-![权限申请弹窗](screenshot.png)
-
 ## 功能特性
 
 - **权限弹窗**：CC 申请权限时弹出交互式窗口，显示中文概述 + 工具名 + 命令详情
